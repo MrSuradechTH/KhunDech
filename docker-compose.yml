@@ -1,0 +1,28 @@
+services:
+  khundech:
+    build:
+      context: ./source
+      dockerfile: Dockerfile
+    container_name: khundech-bot
+    restart: unless-stopped
+    environment:
+      DISCORD_TOKEN:    ${DISCORD_TOKEN}
+      GEMINI_API_KEY:   ${GEMINI_API_KEY}
+      ALLOWED_USER_ID:  ${ALLOWED_USER_ID}
+      MAIN_CHANNEL_ID:  ${MAIN_CHANNEL_ID}
+      CRON_CHANNEL_ID:  ${CRON_CHANNEL_ID}
+      LEARNING_CHANNEL_ID: ${LEARNING_CHANNEL_ID}
+      AI_MODEL:         ${AI_MODEL}
+      DISCORD_APP_ID:   ${DISCORD_APP_ID}
+      GUILD_ID:         ${GUILD_ID}
+    volumes:
+      # Persist source edits and learned data on the host
+      - ./source:/app
+      # Allow Khundech to execute docker/docker compose commands against host engine
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - khundech-net
+
+networks:
+  khundech-net:
+    driver: bridge

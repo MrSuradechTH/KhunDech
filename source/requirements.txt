@@ -1,0 +1,5 @@
+discord.py
+yfinance
+pandas
+google-genai
+docker

@@ -1,0 +1,27 @@
+{
+  "learned_facts": [
+    "[2026-03-17] Financial knowledge Q: what knowledge i shoulde be know about book value of set stock",
+    "[2026-03-17] Financial knowledge Q: How can I evaluate the Return on Equity (ROE) to determine if a low P/BV indicates a value opportunity or a value trap?",
+    "[2026-03-17] Financial knowledge Q: How do I determine the appropriate Cost of Equity (Ke) for a SET-listed company to compare against its Adjusted ROE?",
+    "[2026-03-17] Financial knowledge Q: How do I calculate a company's Weighted Average Cost of Capital (WACC) to assess the total cost of both equity and debt financing for a SET-listed company?",
+    "[2026-03-17] Financial knowledge Q: How do I calculate the Return on Invested Capital (ROIC) to compare against WACC when evaluating value creation?",
+    "[2026-03-17] Financial knowledge Q: How do I accurately calculate the Weighted Average Cost of Capital (WACC) for a stock listed on the SET?",
+    "[2026-03-17] Financial knowledge Q: How do I calculate the Return on Invested Capital (ROIC) for a SET-listed company to ensure it is comparable to the WACC I just calculated?",
+    "[2026-03-17] Financial knowledge job set_financial: Q=How do I determine if a SET-listed company's current ROIC is sustainable or merely a result of transitory cyclical market conditions?",
+    "[2026-03-17] Financial knowledge job set_financial: Q=How can I differentiate between a company's \"maintenance\" CapEx and \"growth\" CapEx to accurately assess its reinvestment efficiency in the SET context?",
+    "[2026-03-17] Financial knowledge job lern_coding_for_improve_my_self: Q=How do I use Python to fetch and process historical price data from the SET (Stock Exchange of Thailand) for AI model training?",
+    "[2026-03-17] Financial knowledge job set_financial: Q=How do I adjust the Marginal ROIC calculation to account for the impact of high inflation on asset replacement costs within the Thai market?",
+    "[2026-03-17] Financial knowledge job lern_coding_for_improve_my_self: Q=Which technical indicators or fundamental features should I engineer from the `Adj Close` and `Volume` data to improve the predictive performance of a machine learning model for SET stocks?",
+    "[2026-03-17] Financial knowledge job set_financial: Q=How can I estimate the \"Replacement Premium\" for a SET-listed company using the Thai Producer Price Index (PPI) to normalize its historical Invested Capital?",
+    "[2026-03-17] Financial knowledge job lern_coding_for_improve_my_self: Q=How can I properly split and validate time-series data for SET stocks to prevent data leakage and look-ahead bias during model training?",
+    "[2026-03-17] Financial knowledge job set_financial: Q=How does this \"Replacement Invested Capital\" calculation specifically influence the interpretation of the company's Economic Value Added (EVA) compared to traditional accounting-based returns?",
+    "[2026-03-17] Financial knowledge job learn_coding_for_improve_my_self: Q=How can I engineer predictive features for SET stocks that account for market microstructure and local factors like ticker-specific liquidity or foreign fund flow?",
+    "[2026-03-17] Financial knowledge job set_financial: Q=How can I reconcile the discrepancy between high traditional EVA and low economic EVA to identify if a SET-listed company is currently masking capital expenditure needs or genuine long-term value creation?",
+    "[2026-03-17] Financial knowledge job learn_coding_for_improve_my_self: Q=How can I backtest these features while properly accounting for the liquidity constraints and high slippage costs inherent in the SET small-cap segment?",
+    "[2026-03-17] Financial knowledge job set_financial: Q=How can I use the \"CapEx/Depreciation Ratio\" and \"Accumulated Depreciation to Gross PPE\" to adjust the Invested Capital base in my valuation model to reflect the true cost of the upcoming CapEx cliff?",
+    "[2026-03-17] Financial knowledge job learn_coding_for_improve_my_self: Q=What specific datasets or databases provide historical bid-ask spread and order book depth data for SET small-cap stocks to accurately calibrate my market impact model?",
+    "[2026-03-17] Financial knowledge job set_financial: Q=How can I incorporate the projected \"Replacement Shortfall\" into my Discounted Cash Flow (DCF) model's terminal year projections to ensure the free cash flow calculation accounts for this structural change in maintenance CapEx?"
+  ],
+  "total_messages": 23,
+  "first_seen": "2026-03-17T22:00:36.294860"
+}

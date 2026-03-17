@@ -1,0 +1,35 @@
+{
+  "project": "KhunDech",
+  "files": [
+    {"path": "bot.py", "role": "Discord entrypoint and command wiring."},
+    {"path": "khundech/config.py", "role": "Environment configuration and runtime paths."},
+    {"path": "khundech/persistence.py", "role": "Persistent memory and chat history storage."},
+    {"path": "khundech/set_finance.py", "role": "SET stock financial data fetching and formatting."},
+    {"path": "khundech/runtime_info.py", "role": "Runtime/environment detection and Docker state facts."},
+    {"path": "khundech/docker_tools.py", "role": "Docker CLI command wrappers used by Discord commands."},
+    {"path": "khundech/self_improve.py", "role": "Self-upgrade engine for create/update/delete file operations."},
+    {"path": "khundech/manifest.py", "role": "Loads and maintains the bot skill/path manifest."},
+    {"path": "khundech/task_scheduler.py", "role": "Handles automated recurring tasks and prompt scheduling."},
+    {"path": "khundech/financial_knowledge.py", "role": "Runs periodic Gemini financial learning, stores knowledge, and provides retrieval context."},
+    {"path": "khundech/web_scraping.py", "role": "Website scraping helper module for automation tasks requiring URL input."},
+    {"path": "finance_module.py", "role": "yfinance-based stock data lookup via !stock command."},
+    {"path": "skills_manifest.json", "role": "Project path and skill manifest that the bot can read."},
+    {"path": "requirements.txt", "role": "Python runtime dependencies."},
+    {"path": "Dockerfile", "role": "Container build definition."}
+  ],
+  "skills": [
+    {"name": "conversation", "description": "Respond to Discord messages using Gemini with memory context."},
+    {"name": "memory", "description": "Persist learned facts and per-user chat history under data/."},
+    {"name": "task_automation", "description": "Manage recurring scheduled tasks with custom prompts via natural language or !task commands."},
+    {"name": "financial_self_learning", "description": "Ask Gemini financial SET-learning questions every 10 minutes, store Q/A knowledge files, and reuse them in future answers."},
+    {"name": "daily_reports", "description": "Generate and post a scheduled daily report to the configured Discord channel."},
+    {"name": "set_financial_data", "description": "Fetch SET stock quote and financial statement data with !setfinancial or !setbalance."},
+    {"name": "set_financial_analysis", "description": "Quick financial health analysis on SET stocks: D/E ratio, equity ratio, cash/liabilities score with 🟢/🟡/🔴 verdict."},
+    {"name": "stock_finance", "description": "Real-time global stock price and sector lookup via !stock <TICKER> using yfinance."},
+    {"name": "web_scraping", "description": "Scrape website content for automation tasks using the url parameter."},
+    {"name": "runtime_grounding", "description": "Report runtime and Docker facts from physical files and container state only via !runtime, !docker, !compose."},
+    {"name": "docker_control", "description": "Run docker and docker compose commands via Discord for allowed user."},
+    {"name": "path_verification", "description": "Check and verify workspace file paths before and after self-upgrade operations."},
+    {"name": "self_improvement", "description": "Modify the workspace with !improve or !upgrade by creating, updating, or deleting text/code files safely."}
+  ]
+}

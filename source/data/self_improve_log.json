@@ -1,0 +1,212 @@
+[
+  {
+    "timestamp": "2026-03-16T15:38:16.469294",
+    "summary": "Implement automated task scheduling system via new task_scheduler.py and update skills_manifest.json to support persistent background automation.",
+    "changed_files": [
+      "khundech/task_scheduler.py",
+      "skills_manifest.json"
+    ],
+    "backup_paths": [
+      "/app/data/backups/20260316_153816_skills_manifest.json"
+    ],
+    "post_apply": "restart",
+    "verification": [
+      {
+        "action": "create",
+        "before": {
+          "path": "khundech/task_scheduler.py",
+          "allowed": true,
+          "exists": false,
+          "is_file": false,
+          "is_dir": false,
+          "resolved": "/app/khundech/task_scheduler.py"
+        },
+        "after": {
+          "path": "khundech/task_scheduler.py",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/khundech/task_scheduler.py"
+        }
+      },
+      {
+        "action": "update",
+        "before": {
+          "path": "skills_manifest.json",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/skills_manifest.json"
+        },
+        "after": {
+          "path": "skills_manifest.json",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/skills_manifest.json"
+        }
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-17T09:07:28.426584",
+    "summary": "Added finance analysis capability using yfinance to the bot, allowing !stock commands to retrieve and analyze stock data.",
+    "changed_files": [
+      "requirements.txt",
+      "finance_module.py",
+      "bot.py",
+      "skills_manifest.json"
+    ],
+    "backup_paths": [
+      "/app/data/backups/20260317_090727_requirements.txt",
+      "/app/data/backups/20260317_090727_bot.py",
+      "/app/data/backups/20260317_090727_skills_manifest.json"
+    ],
+    "post_apply": "rebuild",
+    "verification": [
+      {
+        "action": "update",
+        "before": {
+          "path": "requirements.txt",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/requirements.txt"
+        },
+        "after": {
+          "path": "requirements.txt",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/requirements.txt"
+        }
+      },
+      {
+        "action": "create",
+        "before": {
+          "path": "finance_module.py",
+          "allowed": true,
+          "exists": false,
+          "is_file": false,
+          "is_dir": false,
+          "resolved": "/app/finance_module.py"
+        },
+        "after": {
+          "path": "finance_module.py",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/finance_module.py"
+        }
+      },
+      {
+        "action": "update",
+        "before": {
+          "path": "bot.py",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/bot.py"
+        },
+        "after": {
+          "path": "bot.py",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/bot.py"
+        }
+      },
+      {
+        "action": "update",
+        "before": {
+          "path": "skills_manifest.json",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/skills_manifest.json"
+        },
+        "after": {
+          "path": "skills_manifest.json",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/skills_manifest.json"
+        }
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-17T09:40:40.572548",
+    "summary": "Updated bot.py to adjust time display to UTC+7 (Bangkok time) by adding 7 hours to datetime.utcnow().",
+    "changed_files": [
+      "bot.py"
+    ],
+    "backup_paths": [
+      "/app/data/backups/20260317_094039_bot.py"
+    ],
+    "post_apply": "restart",
+    "verification": [
+      {
+        "action": "update",
+        "before": {
+          "path": "bot.py",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/bot.py"
+        },
+        "after": {
+          "path": "bot.py",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/bot.py"
+        }
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-17T10:00:37.322778",
+    "summary": "Updated bot.py to adjust time reporting to UTC+7 (Bangkok time) by adding a 7-hour timedelta to datetime.utcnow().",
+    "changed_files": [
+      "bot.py"
+    ],
+    "backup_paths": [
+      "/app/data/backups/20260317_100036_bot.py"
+    ],
+    "post_apply": "restart",
+    "verification": [
+      {
+        "action": "update",
+        "before": {
+          "path": "bot.py",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/bot.py"
+        },
+        "after": {
+          "path": "bot.py",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/bot.py"
+        }
+      }
+    ]
+  }
+]

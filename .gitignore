@@ -1,0 +1,24 @@
+# Python virtual environment
+.venv/
+venv/
+
+# Bytecode caches
+**/__pycache__/
+**/*.pyc
+
+# Runtime/generated data
+source/data/backups/
+source/data/*.log
+source/data/sync_*.txt
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Secrets and environment config
+.env
+.env.*
+source/.env
+source/.env.*
+!.env.example
