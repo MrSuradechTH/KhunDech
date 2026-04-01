@@ -8,7 +8,8 @@ from khundech.config import DATA_DIR
 
 KNOWLEDGE_JSON_PATH = Path(DATA_DIR) / "financial_knowledge.json"
 KNOWLEDGE_MD_PATH = Path(DATA_DIR) / "financial_knowledge.md"
-INITIAL_QUESTION = "what knowledge i shoulde be know about book value of set stock"
+INITIAL_QUESTION = "How should I read Book Value and P/BV from SET financial output to judge technical rebound probability with ROA/ROE/Yield/Debt metrics?"
+KNOWLEDGE_ENTRY_CAP = None  # None means infinite; keep all entries
 
 
 def _slugify(value: str) -> str:
@@ -31,12 +32,33 @@ def _load_store(job_name: str | None = None, initial_question: str | None = None
             return json.loads(json_path.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return {"entries": [], "next_question": seed_question, "updated_at": datetime.now().isoformat()}
+    return {
+        "entries": [],
+        "next_question": seed_question,
+        "updated_at": datetime.now().isoformat(),
+        "stats": {
+            "total_learned": 0,
+        },
+    }
+
+
+def _ensure_store_stats(store: dict) -> None:
+    # Ensure stats schema exists for cumulative counters.
+    stats = store.get("stats")
+    if not isinstance(stats, dict):
+        stats = {}
+    total_learned = stats.get("total_learned")
+    if not isinstance(total_learned, int) or total_learned < 0:
+        current_entries = store.get("entries", [])
+        total_learned = len(current_entries) if isinstance(current_entries, list) else 0
+    stats["total_learned"] = total_learned
+    store["stats"] = stats
 
 
 def _save_store(store: dict, job_name: str | None = None) -> None:
     json_path, _ = _store_paths(job_name)
     json_path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_store_stats(store)
     store["updated_at"] = datetime.now().isoformat()
     json_path.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -65,9 +87,17 @@ def _tokenize(text: str) -> set[str]:
     return {w for w in raw if w not in stop}
 
 
-def build_knowledge_research_context(user_message: str, max_items: int = 5) -> str:
+def _iter_entries(job_name: str | None = None) -> list[dict]:
+    # Collect entries from one job store or all financial knowledge stores.
+    entries: list[dict] = []
+    if job_name:
+        store = _load_store(job_name=job_name)
+        current_entries = store.get("entries", []) if isinstance(store, dict) else []
+        if isinstance(current_entries, list):
+            entries.extend(item for item in current_entries if isinstance(item, dict))
+        return entries
+
     json_files = sorted(Path(DATA_DIR).glob("financial_knowledge*.json"))
-    entries = []
     for path in json_files:
         try:
             store = json.loads(path.read_text(encoding="utf-8"))
@@ -75,15 +105,23 @@ def build_knowledge_research_context(user_message: str, max_items: int = 5) -> s
             continue
         current_entries = store.get("entries", []) if isinstance(store, dict) else []
         if isinstance(current_entries, list):
-            entries.extend(current_entries)
+            entries.extend(item for item in current_entries if isinstance(item, dict))
+    return entries
+
+
+def build_knowledge_research_context_with_stats(user_message: str, max_items: int = 5, job_name: str | None = None) -> dict:
+    entries = _iter_entries(job_name=job_name)
     if not entries:
-        return ""
+        return {
+            "context": "",
+            "used_count": 0,
+            "available_count": 0,
+            "max_items": max_items,
+        }
 
     query_tokens = _tokenize(user_message)
     ranked: list[tuple[int, dict]] = []
     for entry in entries:
-        if not isinstance(entry, dict):
-            continue
         question = str(entry.get("question", ""))
         answer = str(entry.get("answer", ""))
         hay_tokens = _tokenize(question + " " + answer[:1500])
@@ -98,6 +136,7 @@ def build_knowledge_research_context(user_message: str, max_items: int = 5) -> s
         picked = [entry for _, entry in ranked[: min(max_items, len(ranked))]]
 
     lines = ["Relevant internal financial knowledge:"]
+    used_count = 0
     for idx, entry in enumerate(picked, start=1):
         q = str(entry.get("question", "")).strip()
         a = str(entry.get("answer", "")).strip()[:700]
@@ -105,12 +144,26 @@ def build_knowledge_research_context(user_message: str, max_items: int = 5) -> s
             continue
         lines.append(f"[{idx}] Q: {q}")
         lines.append(f"[{idx}] A: {a}")
-    return "\n".join(lines)
+        used_count += 1
+
+    context = "\n".join(lines) if used_count > 0 else ""
+    return {
+        "context": context,
+        "used_count": used_count,
+        "available_count": len(entries),
+        "max_items": max_items,
+    }
+
+
+def build_knowledge_research_context(user_message: str, max_items: int = 5) -> str:
+    payload = build_knowledge_research_context_with_stats(user_message, max_items=max_items, job_name=None)
+    return str(payload.get("context") or "")
 
 
 def run_financial_knowledge_learning_cycle(genai_client, model: str, job_name: str = "set_financial", seed_question: str | None = None, topic: str | None = None) -> dict:
     store = _load_store(job_name=job_name, initial_question=seed_question)
     entries = store.setdefault("entries", [])
+    _ensure_store_stats(store)
 
     current_question = str(store.get("next_question") or seed_question or INITIAL_QUESTION).strip() or (seed_question or INITIAL_QUESTION)
 
@@ -127,10 +180,14 @@ def run_financial_knowledge_learning_cycle(genai_client, model: str, job_name: s
 
     learn_prompt = (
         f"You are teaching an internal assistant about {topic or 'Thailand SET stock analysis'}. "
-        "Answer precisely and practically. Focus on financial reasoning, ratios, and caveats.\n\n"
+        "Answer precisely and practically with direct use for stock screening outputs.\n\n"
+        "Main learning objective:\n"
+        "- Improve reading of SET-style financial fields: Price Now, 1Y High/Low, ROA, ROE, P/E, P/BV, Dividend %, Book Value, Debt/Equity.\n"
+        "- Focus on book value/PBV interpretation and rebound probability logic.\n"
+        "- Produce rules that can be applied directly in deterministic screening.\n\n"
         f"Existing learned knowledge:\n{prior_block}\n\n"
         f"Current learning question: {current_question}\n\n"
-        "Return a concise but high-value learning note in plain text."
+        "Return a concise but high-value learning note in plain text. Include keywords: book value, P/BV, ROA, ROE, Yield, Debt/Equity, rebound."
     )
 
     answer_response = genai_client.models.generate_content(model=model, contents=learn_prompt)
@@ -140,7 +197,8 @@ def run_financial_knowledge_learning_cycle(genai_client, model: str, job_name: s
 
     next_prompt = (
         "Based on the learned knowledge below, propose exactly ONE next question to continue learning "
-        "about SET stock financial analysis. Keep it short and specific. Return only the question.\n\n"
+        "about SET book value reading and rebound prediction from setfinancial-style output. "
+        "Keep it short and specific. Return only the question.\n\n"
         f"Current question: {current_question}\n"
         f"Learned answer: {answer_text[:2000]}"
     )
@@ -156,7 +214,28 @@ def run_financial_knowledge_learning_cycle(genai_client, model: str, job_name: s
         "answer_chars": len(answer_text),
     }
     entries.append(entry)
-    store["entries"] = entries[-300:]
+
+    # Deduplicate by normalized question and keep a bounded recent window
+    # to avoid unbounded growth with repeated/near-identical learning loops.
+    dedup_map: dict[str, dict] = {}
+    for item in reversed(entries):
+        if not isinstance(item, dict):
+            continue
+        question_key = re.sub(r"\s+", " ", str(item.get("question", "")).strip().lower())
+        if not question_key:
+            continue
+        if question_key in dedup_map:
+            continue
+        dedup_map[question_key] = item
+
+    deduped_entries = list(reversed(list(dedup_map.values())))
+    if KNOWLEDGE_ENTRY_CAP is None:
+        store["entries"] = deduped_entries
+    else:
+        cap = max(1, int(KNOWLEDGE_ENTRY_CAP))
+        store["entries"] = deduped_entries[-cap:]
+    stats = store.setdefault("stats", {})
+    stats["total_learned"] = int(stats.get("total_learned", 0)) + 1
     store["next_question"] = next_question
     _save_store(store, job_name=job_name)
     _append_markdown_entry(current_question, answer_text, next_question, job_name=job_name)
@@ -168,7 +247,9 @@ def run_financial_knowledge_learning_cycle(genai_client, model: str, job_name: s
         "question": current_question,
         "answer_preview": answer_text[:220],
         "next_question": next_question,
-        "total_entries": len(store["entries"]),
+        "total_entries": int(store.get("stats", {}).get("total_learned", len(store["entries"]))),
+        "stored_entries": len(store["entries"]),
+        "entry_cap": KNOWLEDGE_ENTRY_CAP,
         "knowledge_json": str(json_path),
         "knowledge_md": str(md_path),
     }

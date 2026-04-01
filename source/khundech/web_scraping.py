@@ -209,6 +209,7 @@ def _extract_siamchart_rows(payload: str) -> list[list[str]]:
 def get_siamchart_stock_rows(limit: int | None = 200) -> list[dict[str, str]]:
     payload = get_siamchart_data()
     rows = _extract_siamchart_rows(payload)
+
     if limit is not None:
         rows = rows[: max(0, limit)]
 

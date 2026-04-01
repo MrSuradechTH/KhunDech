@@ -208,5 +208,175 @@
         }
       }
     ]
+  },
+  {
+    "timestamp": "2026-03-18T13:19:53.493954",
+    "summary": "Removed the learn_coding_for_improve_my_self intent from the validation script and updated the project structure by excluding it from the manifest.",
+    "changed_files": [
+      "_validate_add_autolern_style.py",
+      "skills_manifest.json"
+    ],
+    "backup_paths": [
+      "/app/data/backups/20260318_131952__validate_add_autolern_style.py",
+      "/app/data/backups/20260318_131952_skills_manifest.json"
+    ],
+    "post_apply": "restart",
+    "verification": [
+      {
+        "action": "update",
+        "before": {
+          "path": "_validate_add_autolern_style.py",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/_validate_add_autolern_style.py"
+        },
+        "after": {
+          "path": "_validate_add_autolern_style.py",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/_validate_add_autolern_style.py"
+        }
+      },
+      {
+        "action": "update",
+        "before": {
+          "path": "skills_manifest.json",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/skills_manifest.json"
+        },
+        "after": {
+          "path": "skills_manifest.json",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/skills_manifest.json"
+        }
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-18T13:34:05.767247",
+    "summary": "Disabled auto-learning by removing the relevant script and entry from the manifest, and cleaning up dependencies if applicable.",
+    "changed_files": [
+      "_validate_add_autolern_style.py",
+      "skills_manifest.json"
+    ],
+    "backup_paths": [
+      "/app/data/backups/20260318_133405__validate_add_autolern_style.py",
+      "/app/data/backups/20260318_133405_skills_manifest.json"
+    ],
+    "post_apply": "restart",
+    "verification": [
+      {
+        "action": "delete",
+        "before": {
+          "path": "_validate_add_autolern_style.py",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/_validate_add_autolern_style.py"
+        },
+        "after": {
+          "path": "_validate_add_autolern_style.py",
+          "allowed": true,
+          "exists": false,
+          "is_file": false,
+          "is_dir": false,
+          "resolved": "/app/_validate_add_autolern_style.py"
+        }
+      },
+      {
+        "action": "update",
+        "before": {
+          "path": "skills_manifest.json",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/skills_manifest.json"
+        },
+        "after": {
+          "path": "skills_manifest.json",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/skills_manifest.json"
+        }
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-18T13:37:26.362282",
+    "summary": "Remove learn_coding_for_improve_my_self from skills_manifest.json to disable the module.",
+    "changed_files": [
+      "skills_manifest.json"
+    ],
+    "backup_paths": [
+      "/app/data/backups/20260318_133725_skills_manifest.json"
+    ],
+    "post_apply": "restart",
+    "verification": [
+      {
+        "action": "update",
+        "before": {
+          "path": "skills_manifest.json",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/skills_manifest.json"
+        },
+        "after": {
+          "path": "skills_manifest.json",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/skills_manifest.json"
+        }
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-03-18T14:02:22.558554",
+    "summary": "Disable the learn_coding_for_improve_my_self skill by removing it from the skills_manifest.json.",
+    "changed_files": [
+      "skills_manifest.json"
+    ],
+    "backup_paths": [
+      "/app/data/backups/20260318_140221_skills_manifest.json"
+    ],
+    "post_apply": "restart",
+    "verification": [
+      {
+        "action": "update",
+        "before": {
+          "path": "skills_manifest.json",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/skills_manifest.json"
+        },
+        "after": {
+          "path": "skills_manifest.json",
+          "allowed": true,
+          "exists": true,
+          "is_file": true,
+          "is_dir": false,
+          "resolved": "/app/skills_manifest.json"
+        }
+      }
+    ]
   }
 ]

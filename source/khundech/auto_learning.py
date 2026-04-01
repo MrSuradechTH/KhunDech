@@ -10,8 +10,8 @@ from khundech.persistence import load_json, save_json
 
 AUTO_LEARN_FILE = "auto_learning_jobs.json"
 DEFAULT_JOB_NAME = "set_financial"
-DEFAULT_SEED_QUESTION = "what knowledge i shoulde be know about book value of set stock"
-DEFAULT_PURPOSE = "SET stock financial analysis"
+DEFAULT_SEED_QUESTION = "How should I read Book Value and P/BV from SET financial output to judge technical rebound probability with ROA/ROE/Yield/Debt metrics?"
+DEFAULT_PURPOSE = "Learn SET book value reading and rebound prediction from setfinancial-style fields"
 
 
 AUTO_LEARN_KEYWORDS = [
@@ -110,6 +110,10 @@ def _extract_interval(text: str):
     if not match:
         match = re.search(r"(?:interval|frequency|schedule)\s*[:=]\s*(\d+)\s*(minutes?|mins?|min|hours?|hrs?|hr|days?|นาที|ชั่วโมง|วัน)", text, re.I)
     if not match:
+        match = re.search(r"(?:to|เป็น)\s*(\d+)\s*(minutes?|mins?|min|hours?|hrs?|hr|days?|นาที|ชั่วโมง|วัน)", text, re.I)
+    if not match:
+        match = re.search(r"(?:change|update|set|edit)\s+interval\s+[^\n]*?\s+(\d+)\s*(minutes?|mins?|min|hours?|hrs?|hr|days?|นาที|ชั่วโมง|วัน)", text, re.I)
+    if not match:
         return None
     interval = int(match.group(1))
     unit = _normalize_unit(match.group(2))
@@ -199,9 +203,53 @@ def parse_auto_learning_add_intent(text: str) -> dict | None:
 def parse_auto_learning_update_intent(text: str) -> dict | None:
     # Parse update command for interval, prompt, purpose, and active state.
     lower = (text or "").lower()
-    if not lower or not any(keyword in lower for keyword in AUTO_LEARN_KEYWORDS) or not any(token in lower for token in ["update", "change", "edit", "enable", "disable", "turn on", "turn off", "pause", "resume", "active", "inactive", "เปิด", "ปิด"]):
+    action_tokens = ["update", "change", "edit", "enable", "disable", "turn on", "turn off", "pause", "resume", "active", "inactive", "เปิด", "ปิด"]
+    if not lower or not any(token in lower for token in action_tokens):
         return None
+    has_auto_learn_keyword = any(keyword in lower for keyword in AUTO_LEARN_KEYWORDS)
+    existing_jobs = load_auto_learning_jobs().get("jobs", [])
+    existing_names = {
+        str(job.get("name", "")).strip().lower()
+        for job in existing_jobs
+        if isinstance(job, dict)
+    }
+
+    # Allow short forms like: "disable learn_coding_for_improve_my_self"
+    # but only when they clearly begin with an action verb.
+    if not has_auto_learn_keyword:
+        starts_with_toggle = bool(re.match(r"^\s*(disable|enable|pause|resume|turn\s+off|turn\s+on|ปิด|เปิด)\b", lower, re.I))
+        has_interval_update = bool(_extract_interval(text)) and any(token in lower for token in ["change", "update", "edit", "set"])
+        mentions_existing_name = any(name and name in lower for name in existing_names)
+        if not starts_with_toggle and not (has_interval_update and mentions_existing_name):
+            return None
+
     name = _extract_quoted_value(text, [r"name", r"auto\s*learn\s*name"]) or _extract_labeled_value(text, [r"name", r"auto\s*learn\s*name"])
+    if not name:
+        freeform_patterns = [
+            r"^\s*(?:disable|enable|pause|resume|turn\s+off|turn\s+on|ปิด|เปิด)\s+([a-zA-Z0-9_\- ]+?)\s*$",
+            r"(?:disable|enable|pause|resume|turn\s+off|turn\s+on)\s+([a-zA-Z0-9_\- ]+?)\s+(?:auto\s*learn|auto\s*lern|autolearn|autolern)\b",
+            r"(?:auto\s*learn|auto\s*lern|autolearn|autolern)\s+([a-zA-Z0-9_\- ]+?)\s+(?:disable|enable|pause|resume|turn\s+off|turn\s+on)\b",
+        ]
+        for pattern in freeform_patterns:
+            match = re.search(pattern, text, re.I)
+            if match:
+                candidate = match.group(1).strip().strip('"\'')
+                if candidate:
+                    name = candidate
+                    break
+
+    # If no auto-learn keyword in text, enforce exact match to existing job names
+    # so generic commands are not hijacked.
+    if name and not has_auto_learn_keyword:
+        if name.strip().lower() not in existing_names:
+            return None
+
+    if not name and not has_auto_learn_keyword:
+        for existing_name in existing_names:
+            if existing_name and existing_name in lower:
+                name = existing_name
+                break
+
     interval_info = _extract_interval(text)
     seed_question = _extract_quoted_value(text, [r"init\s*prompt", r"prompt", r"question", r"seed", r"next\s*question"]) or _extract_labeled_value(text, [r"init\s*question", r"init\s*prompt", r"next\s*question", r"question", r"prompt", r"seed"])
     purpose = _extract_quoted_value(text, [r"purpose", r"topic", r"about", r"for"]) or _extract_labeled_value(text, [r"purpose", r"topic"])
@@ -240,10 +288,13 @@ def is_auto_learning_list_intent(text: str) -> bool:
         return False
     list_markers = [
         "show auto learn",
+        "show me auto learn",
         "list auto learn",
         "show autolearn",
         "list autolearn",
         "how many auto",
+        "auto learn we have",
+        "auto lern we have",
         "auto learn count",
         "auto lern count",
         "กี่ auto",

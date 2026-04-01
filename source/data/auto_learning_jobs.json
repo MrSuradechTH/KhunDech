@@ -3,14 +3,14 @@
     {
       "id": 1,
       "name": "set_financial",
-      "topic": "SET stock financial analysis",
+      "topic": "Learn SET book value reading and rebound prediction from setfinancial-style fields",
       "interval": 10,
       "unit": "minutes",
-      "seed_question": "what knowledge i shoulde be know about book value of set stock",
+      "seed_question": "How should I read Book Value and P/BV from SET financial output to judge technical rebound probability with ROA/ROE/Yield/Debt metrics?",
       "active": true,
-      "last_run": "2026-03-17T17:20:38.866514",
+      "last_run": "2026-04-01T10:16:17.007886",
       "created_at": "2026-03-17T15:55:44.001140",
-      "purpose": "SET stock financial analysis"
+      "purpose": "Learn SET book value reading and rebound prediction from setfinancial-style fields"
     },
     {
       "id": 2,
@@ -19,8 +19,8 @@
       "seed_question": "what is python and how can i use for deeply for ai service project and give me example of code",
       "interval": 10,
       "unit": "minutes",
-      "active": true,
-      "last_run": "2026-03-17T17:16:49.113910",
+      "active": false,
+      "last_run": "2026-03-18T14:07:07.458047",
       "created_at": "2026-03-17T16:13:09.317902"
     }
   ]

@@ -40,7 +40,11 @@ from khundech.auto_learning import (
     update_auto_learning_job,
 )
 from khundech.docker_tools import format_host_path_report, restart_self, run_docker_command, run_sync_probe
-from khundech.financial_knowledge import build_knowledge_research_context, run_financial_knowledge_learning_cycle
+from khundech.financial_knowledge import (
+    build_knowledge_research_context,
+    build_knowledge_research_context_with_stats,
+    run_financial_knowledge_learning_cycle,
+)
 from khundech.manifest import build_skills_context, ensure_skills_manifest, load_skills_manifest
 from khundech.persistence import load_history, load_memory, save_history, save_memory
 from khundech.runtime_info import format_runtime_facts, get_runtime_facts
@@ -73,6 +77,10 @@ BASE_SYSTEM_INSTRUCTION = (
     "Never claim that you created/updated/deleted files unless those file paths are physically verified to exist (or not exist for delete) on disk.\n"
     "Use maximum reasoning depth and check your answer for consistency before replying.\n"
     "If you are unsure, say you do not know instead of inventing details.\n"
+    "Always research your internal learned knowledge (bot brain) first before answering.\n"
+    "If relevant internal knowledge exists, prioritize it and cite it in plain language in your answer.\n"
+    "For task execution prompts, apply the same knowledge-first policy before producing conclusions.\n"
+    "If no relevant internal knowledge is found, clearly say so and then proceed with grounded reasoning only.\n"
     "When the user needs SET stock financial data, tell them to use !setfinancial <SYMBOL> or !setbalance <SYMBOL>.\n"
     "When the user wants you to change your own codebase, tell them to use !improve <goal> or !upgrade <goal>.\n"
     "When the user asks about runtime or Docker state, use !runtime, !docker, or !compose."
@@ -597,7 +605,7 @@ def _extract_pretty_table_output_intent(text: str) -> bool:
 
 def _run_list_auto_learning_intent() -> str:
     # Render a Discord-friendly summary of all auto-learning jobs.
-    jobs = list_auto_learning_jobs()
+    jobs = [job for job in list_auto_learning_jobs() if isinstance(job, dict)]
     if not jobs:
         return "🧠 No auto-learning jobs found."
     lines = [f"🧠 **Auto-learning jobs: {len(jobs)}**"]
@@ -651,12 +659,29 @@ def _run_update_auto_learning_intent(intent: dict) -> str:
     )
     if not job:
         return f"Auto-learning job not found: {intent['name']}"
+
+    persisted_jobs = [item for item in list_auto_learning_jobs() if isinstance(item, dict)]
+    persisted = None
+    target_name = str(job.get("name", "")).strip().lower()
+    for item in persisted_jobs:
+        if str(item.get("name", "")).strip().lower() == target_name:
+            persisted = item
+            break
+    if persisted is None:
+        persisted = job
+
+    persistence_path = "/app/data/auto_learning_jobs.json"
+
     return (
-        f"✅ Auto-learning job updated: {job.get('name')}\n"
-        f"- Interval: every {job.get('interval')} {job.get('unit')}\n"
-        f"- Purpose: {job.get('purpose')}\n"
-        f"- Init prompt: {job.get('seed_question')}\n"
-        f"- Active: {job.get('active', True)}"
+        f"✅ Auto-learning job updated: {persisted.get('name')}\n"
+        f"- Interval: every {persisted.get('interval')} {persisted.get('unit')}\n"
+        f"- Purpose: {persisted.get('purpose')}\n"
+        f"- Init prompt: {persisted.get('seed_question')}\n"
+        f"- Active: {persisted.get('active', True)}\n"
+        "\n"
+        "📁 Persistence check\n"
+        f"Path: {persistence_path}\n"
+        "Status: Update committed to auto-learning persistence store."
     )
 
 
@@ -1458,6 +1483,21 @@ def _looks_like_self_upgrade_goal(text: str) -> bool:
     if not lower:
         return False
 
+    # Guard: do not treat auto-learning enable/disable commands as self-upgrade goals.
+    if re.match(r"^\s*(disable|enable|pause|resume|turn\s+off|turn\s+on|ปิด|เปิด)\b", lower, re.I):
+        try:
+            jobs = load_auto_learning_jobs().get("jobs", [])
+        except Exception:
+            jobs = []
+        for job in jobs:
+            if not isinstance(job, dict):
+                continue
+            job_name = str(job.get("name", "")).strip().lower()
+            if job_name and job_name in lower:
+                return False
+    if any(keyword in lower for keyword in ["auto learn", "auto lern", "autolearn", "autolern"]):
+        return False
+
     explicit_upgrade = [
         "self improve",
         "self-improve",
@@ -1475,6 +1515,36 @@ def _looks_like_self_upgrade_goal(text: str) -> bool:
     upgrade_markers = ["upgrade", "improve", "อัพเกรด", "อัปเกรด"]
     code_markers = ["code", "coding", "โค้ด", "automation", "อัตโนมัติ", "prompt", "pormt", "skill", "analy", "analysis"]
     return any(token in lower for token in upgrade_markers) and any(token in lower for token in code_markers)
+
+
+def _extract_auto_learning_quick_toggle_intent(text: str) -> dict | None:
+    # Support short commands like "disable learn_coding_for_improve_my_self"
+    # by matching exact existing auto-learning job names.
+    lower = (text or "").strip().lower()
+    if not lower:
+        return None
+
+    action_match = re.match(r"^\s*(disable|enable|pause|resume|turn\s+off|turn\s+on|ปิด|เปิด)\s+(.+?)\s*$", lower, re.I)
+    if not action_match:
+        return None
+
+    action_word = action_match.group(1).strip().lower()
+    target_name = action_match.group(2).strip().strip('"').strip("'")
+    target_name = re.sub(r"\s+(auto\s*learn|auto\s*lern|autolearn|autolern)$", "", target_name, flags=re.I).strip()
+    if not target_name:
+        return None
+
+    jobs = load_auto_learning_jobs().get("jobs", [])
+    existing_names = {
+        str(job.get("name", "")).strip().lower()
+        for job in jobs
+        if isinstance(job, dict)
+    }
+    if target_name not in existing_names:
+        return None
+
+    active = action_word in {"enable", "resume", "turn on", "เปิด"}
+    return {"name": target_name, "active": active}
 
 
 def _extract_upgrade_followup_goal(text: str, history: list) -> str | None:
@@ -1871,6 +1941,19 @@ def _extract_task_schedule_update_intent(text: str) -> dict | None:
 
     has_task_marker = ("task" in lower or "งาน" in lower)
     has_interval_marker = ("interval" in lower or "ความถี่" in lower)
+
+    if not has_task_marker and has_interval_marker:
+        try:
+            jobs = load_auto_learning_jobs().get("jobs", [])
+        except Exception:
+            jobs = []
+        for job in jobs:
+            if not isinstance(job, dict):
+                continue
+            job_name = str(job.get("name", "")).strip().lower()
+            if job_name and job_name in lower:
+                return None
+
     if not has_task_marker and not has_interval_marker:
         return None
     if not any(token in lower for token in ["change", "update", "up date", "uo date", "set", "every", "ervery", "instead", "จาก", "เป็น"]):
@@ -2471,6 +2554,11 @@ def _is_auto_learning_job_due(job: dict, now: datetime) -> bool:
     # Evaluate whether one auto-learning job is due.
     if not isinstance(job, dict) or not job.get("active", True):
         return False
+
+    blocked_until = _parse_datetime(job.get("blocked_until"))
+    if blocked_until is not None and now < blocked_until:
+        return False
+
     interval = job.get("interval")
     unit = job.get("unit")
     if not isinstance(interval, int) or interval <= 0 or not isinstance(unit, str):
@@ -2492,8 +2580,48 @@ def _record_auto_learning_last_run(name: str, timestamp: str) -> None:
     for job in data.get("jobs", []):
         if isinstance(job, dict) and str(job.get("name", "")).strip().lower() == name.strip().lower():
             job["last_run"] = timestamp
+            job.pop("blocked_until", None)
+            job.pop("last_error", None)
+            job.pop("last_error_at", None)
             break
     save_auto_learning_jobs(data)
+
+
+def _record_auto_learning_backoff(name: str, blocked_until: str, error_text: str) -> None:
+    # Persist temporary block/cooldown for one auto-learning job after repeated API failures.
+    data = load_auto_learning_jobs()
+    for job in data.get("jobs", []):
+        if isinstance(job, dict) and str(job.get("name", "")).strip().lower() == name.strip().lower():
+            job["blocked_until"] = blocked_until
+            job["last_error"] = error_text[:500]
+            job["last_error_at"] = _now_utc_naive().isoformat()
+            break
+    save_auto_learning_jobs(data)
+
+
+def _get_auto_learning_backoff_seconds(error: Exception) -> int | None:
+    # Determine cooldown seconds for transient/quota failures.
+    text = str(error or "")
+    lower = text.lower()
+    if not lower:
+        return None
+
+    if "generaterequestsperdayperprojectpermodel-freetier" in lower:
+        return 6 * 60 * 60
+    if "resource_exhausted" in lower or "quota exceeded" in lower:
+        return 60 * 60
+
+    retry_match = re.search(r"retry\s+in\s+([0-9]+(?:\.[0-9]+)?)s", lower)
+    if retry_match:
+        try:
+            retry_s = int(float(retry_match.group(1)))
+            return max(60, retry_s)
+        except Exception:
+            return 60
+
+    if "429" in lower:
+        return 15 * 60
+    return None
 
 
 async def _run_single_auto_learning_job(job: dict) -> dict:
@@ -2582,6 +2710,41 @@ async def _execute_stock_seeking_task(prompt: str) -> str:
     prompt_text = prompt or ""
     prompt_lower = prompt_text.lower()
 
+    chg_operator = "<"
+    chg_threshold = -3.0
+    chg_match = re.search(r"chg\s*%\s*([<>]=?)\s*(-?[0-9]+(?:\.[0-9]+)?)", prompt_text, re.I)
+    if chg_match:
+        try:
+            chg_operator = chg_match.group(1)
+            chg_threshold = float(chg_match.group(2))
+        except Exception:
+            chg_operator = "<"
+            chg_threshold = -3.0
+
+    roa_floor = 0.0
+    roa_match = re.search(r"roa\s*%\s*>\s*(-?[0-9]+(?:\.[0-9]+)?)", prompt_text, re.I)
+    if roa_match:
+        try:
+            roa_floor = float(roa_match.group(1))
+        except Exception:
+            roa_floor = 0.0
+
+    roe_floor = 0.0
+    roe_match = re.search(r"roe\s*%\s*>\s*(-?[0-9]+(?:\.[0-9]+)?)", prompt_text, re.I)
+    if roe_match:
+        try:
+            roe_floor = float(roe_match.group(1))
+        except Exception:
+            roe_floor = 0.0
+
+    yield_floor = 4.0
+    yield_match = re.search(r"yield\s*%\s*>\s*(-?[0-9]+(?:\.[0-9]+)?)", prompt_text, re.I)
+    if yield_match:
+        try:
+            yield_floor = float(yield_match.group(1))
+        except Exception:
+            yield_floor = 4.0
+
     score_threshold = 70
     score_matches = re.findall(r"score\s*>\s*(\d{1,3})", prompt_text, re.I)
     if score_matches:
@@ -2589,8 +2752,6 @@ async def _execute_stock_seeking_task(prompt: str) -> str:
             score_threshold = max(0, min(100, int(score_matches[0])))
         except Exception:
             score_threshold = 70
-
-    target_verified = 100 if re.search(r"top\s*100", prompt_text, re.I) else 25
 
     requires_de_screen = any(token in prompt_lower for token in ["debt/equit", "debt/equity", "d/e"])
     de_threshold = 1.5
@@ -2600,6 +2761,18 @@ async def _execute_stock_seeking_task(prompt: str) -> str:
             de_threshold = float(de_match.group(1))
         except Exception:
             de_threshold = 1.5
+
+    requires_pbv_screen = "p/bv" in prompt_lower
+    pbv_operator = "<"
+    pbv_threshold = 1.5
+    pbv_match = re.search(r"p\s*/\s*bv\s*([<>]=?)\s*([0-9]+(?:\.[0-9]+)?)", prompt_text, re.I)
+    if pbv_match:
+        try:
+            pbv_operator = pbv_match.group(1)
+            pbv_threshold = float(pbv_match.group(2))
+        except Exception:
+            pbv_operator = "<"
+            pbv_threshold = 1.5
 
     reselection_trigger = None
     reselect_match = re.search(r"score\s*>\s*(\d{1,3}).{0,120}(?:re-select|reselect|ซ้ำ)", prompt_text, re.I | re.S)
@@ -2630,8 +2803,27 @@ async def _execute_stock_seeking_task(prompt: str) -> str:
         siam_rows = await asyncio.to_thread(_scrape_rows, 600)
     except Exception as exc:
         return f"⚠️ stock_seeking failed while loading Siamchart data: {exc}"
+    pool_total = len(siam_rows)
+
+    knowledge_query_for_screening = (
+        f"{prompt_text}\n"
+        "book value pbv p/bv roe roa yield debt/equit debt/equity d/e "
+        "set financial setfinancial price now 1y high low technical rebound"
+    )
+    knowledge_cap = 12
+    knowledge_payload = build_knowledge_research_context_with_stats(
+        knowledge_query_for_screening,
+        max_items=knowledge_cap,
+        job_name="set_financial",
+    )
+    knowledge_context = str(knowledge_payload.get("context") or "")
+    knowledge_lower = knowledge_context.lower() if knowledge_context else ""
+    knowledge_item_count = int(knowledge_payload.get("used_count") or 0)
+    knowledge_total_available = int(knowledge_payload.get("available_count") or 0)
+    knowledge_max_items = int(knowledge_payload.get("max_items") or knowledge_cap)
 
     # ── Stage 2: apply Siamchart-only filter + pre-score ─────────────────
+    TARGET = 0
     pre_candidates: list[dict] = []
     seen_symbols: set[str] = set()
 
@@ -2651,18 +2843,57 @@ async def _execute_stock_seeking_task(prompt: str) -> str:
         roe       = _to_float_or_none(row.get("ROE%"))
         div_yield = _to_float_or_none(row.get("Yield%"))
         row_de    = _to_float_or_none(row.get("D/E") or row.get("Debt/Equit") or row.get("Debt/Equity"))
+        row_pbv   = _to_float_or_none(row.get("P/BV"))
 
         if chg_pct is None or roa is None or roe is None or div_yield is None:
             continue
-        if not (chg_pct < -3 and roa > 0 and roe > 0 and div_yield > 4):
+
+        chg_ok = False
+        if chg_operator == "<":
+            chg_ok = chg_pct < chg_threshold
+        elif chg_operator == "<=":
+            chg_ok = chg_pct <= chg_threshold
+        elif chg_operator == ">":
+            chg_ok = chg_pct > chg_threshold
+        elif chg_operator == ">=":
+            chg_ok = chg_pct >= chg_threshold
+        if not chg_ok:
+            continue
+
+        if not (roa > roa_floor and roe > roe_floor and div_yield > yield_floor):
             continue
         if requires_de_screen:
             if row_de is None:
                 continue
             if row_de >= de_threshold:
                 continue
+        if requires_pbv_screen:
+            if row_pbv is None:
+                continue
+            if pbv_operator == ">":
+                if row_pbv <= pbv_threshold:
+                    continue
+            elif pbv_operator == ">=":
+                if row_pbv < pbv_threshold:
+                    continue
+            elif pbv_operator == "<":
+                if row_pbv >= pbv_threshold:
+                    continue
+            elif pbv_operator == "<=":
+                if row_pbv > pbv_threshold:
+                    continue
 
-        pre_score = _safe_score_from_metrics(chg_pct, roa, roe, div_yield)
+        knowledge_bonus = 0
+        if any(token in knowledge_lower for token in ["book value", "p/bv", "pbv"]) and row_pbv is not None and row_pbv <= pbv_threshold:
+            knowledge_bonus += 4
+        if any(token in knowledge_lower for token in ["debt", "d/e", "equity ratio"]) and row_de is not None and row_de <= de_threshold:
+            knowledge_bonus += 4
+        if any(token in knowledge_lower for token in ["yield", "dividend", "ปันผล"]) and div_yield > yield_floor:
+            knowledge_bonus += 3
+        if any(token in knowledge_lower for token in ["roe", "roa", "quality"]) and (roe >= max(10.0, roe_floor + 2.0) or roa >= max(8.0, roa_floor + 2.0)):
+            knowledge_bonus += 3
+
+        pre_score = min(100, _safe_score_from_metrics(chg_pct, roa, roe, div_yield) + knowledge_bonus)
         seen_symbols.add(symbol)
         pre_candidates.append(
             {
@@ -2675,30 +2906,34 @@ async def _execute_stock_seeking_task(prompt: str) -> str:
                 "pbv":       (row.get("P/BV") or "N/A").strip() or "N/A",
                 "de_row":    row_de,
                 "pre_score": pre_score,
+                "screening_mode": "strict",
             }
         )
 
+    strict_screened_count = len(pre_candidates)
+    knowledge_added_count = strict_screened_count
+    TARGET = max(1, strict_screened_count)
+
+    # Sort by pre-score descending so we query the best candidates first
+    pre_candidates.sort(key=lambda x: x["pre_score"], reverse=True)
+
     if not pre_candidates:
-        cond_text = "(Chg% < -3, ROA > 0, ROE > 0, Yield% > 4"
+        cond_text = f"(Chg% {chg_operator} {chg_threshold:g}, ROA > {roa_floor:g}, ROE > {roe_floor:g}, Yield% > {yield_floor:g}"
         if requires_de_screen:
             cond_text += f", Debt/Equit < {de_threshold:g}"
+        if requires_pbv_screen:
+            cond_text += f", P/BV {pbv_operator} {pbv_threshold:g}"
         cond_text += ")"
         return (
             "❌ stock_seeking: no stocks matched the screening conditions "
             f"{cond_text} from current Siamchart data."
         )
 
-    # Sort by pre-score descending so we query the best candidates first
-    pre_candidates.sort(key=lambda x: x["pre_score"], reverse=True)
-
-    # ── Stage 3: verify with SET, accumulate until 25 *confirmed* SET rows ─
-    TARGET = target_verified
+    # ── Stage 3: verify with SET, accumulate until target *confirmed* SET rows ─
     results: list[dict] = []
     set_verified_count = 0  # counts only successful SET fetches
 
     for item in pre_candidates:
-        if set_verified_count >= TARGET:
-            break
         symbol = item["symbol"]
         try:
             set_data  = await asyncio.to_thread(fetch_set_financial_data, symbol)
@@ -2754,38 +2989,51 @@ async def _execute_stock_seeking_task(prompt: str) -> str:
     total_verified = set_verified_count   # lock in count before we filter
     total_attempted = len(results)        # total candidates attempted through SET step
     results.sort(key=lambda x: x["score"], reverse=True)
-    high_score = [r for r in results if r["score"] > score_threshold]
+    threshold_pass = [r for r in results if r["score"] > score_threshold]
+    high_score = list(threshold_pass)
+    selected_results = list(high_score)
 
     reselection_note = None
+    fallback_marked_symbols: set[str] = set()
     if reselection_trigger is not None and min_reselect_count > 0:
         trigger_count = sum(1 for r in results if r["score"] > reselection_trigger)
-        if trigger_count == 0:
-            if len(results) >= min_reselect_count:
-                high_score = results[:min_reselect_count]
+        if trigger_count == 0 and len(threshold_pass) >= min_reselect_count:
+            selected_results = threshold_pass[:min_reselect_count]
+            reselection_note = (
+                f"ℹ️ Re-selected top {min_reselect_count} from Score > {score_threshold} group because no stock scored > {reselection_trigger}."
+            )
+
+        if len(selected_results) < min_reselect_count:
+            needed = min_reselect_count - len(selected_results)
+            low_score_pool = [r for r in results if r["score"] <= score_threshold]
+            fallback_rows = low_score_pool[:needed]
+            if fallback_rows:
+                selected_results.extend(fallback_rows)
+                fallback_marked_symbols = {str(r.get("symbol") or "") for r in fallback_rows}
                 reselection_note = (
-                    f"ℹ️ Re-selected top {min_reselect_count} from Chg% < -3 group because no stock scored > {reselection_trigger}."
+                    f"⚠️ Re-select target is {min_reselect_count}. Added {len(fallback_rows)} lower-score fallback stock(s) with ⚠️ marker because high-score stocks were not enough."
                 )
-            else:
-                high_score = results
+            elif len(results) < min_reselect_count:
                 reselection_note = (
                     f"⚠️ Re-select requested minimum {min_reselect_count}, but only {len(results)} stocks had complete verified data."
                 )
 
     now_local = datetime.now().astimezone()
 
-    if not high_score:
+    if not selected_results:
         return (
             f"📊 **Stock Seeking — Deterministic** ({now_local.strftime('%Y-%m-%d %H:%M %Z')})\n"
-            f"Siamchart pool: 600 → screened {len(pre_candidates)} candidates → "
-            f"SET-verified {total_verified}/{total_attempted} fetched → **0 scored > {score_threshold}**\n"
+            f"Siamchart pool ({pool_total}/{pool_total}) [fetched from web] → strict screened ({strict_screened_count}/{pool_total}) "
+            f"→ knowledge add ({knowledge_added_count}/{pool_total}) → screened total ({len(pre_candidates)}/{pool_total})\n"
+            f"SET-verified ({total_verified}/{TARGET} all screened) fetched → above-score ({len(high_score)}/{len(pre_candidates)}) with Score > {score_threshold}\n"
             f"No stocks passed all conditions **and** scored > {score_threshold} in this run.\n"
             "Try running again later or relax the Yield/ROA/ROE thresholds."
         )
 
-    results = high_score
+    results = selected_results
 
     # --- build aligned monospace table for Discord (ticker-based for clean width) ---
-    cols = ["Sym", "Px", "1Y H/L", "ROA", "ROE", "PE", "PBV", "D/E", "Div%", "Score"]
+    cols = ["Sym", "Px", "ROA", "ROE", "PE", "PBV", "D/E", "Div%", "Score"]
     table_rows: list[list[str]] = []
 
     for r in results:
@@ -2796,18 +3044,25 @@ async def _execute_stock_seeking_task(prompt: str) -> str:
         de_text = f"{de_value:.2f}" if de_value is not None else "N/A"
         yld_text = f"{r['yield_pct']:.2f}" if r["yield_pct"] is not None else "N/A"
         name_text = str(r.get("symbol") or r.get("stock_name") or "N/A")
-        hl_text = str(r.get("one_year_hl") or "N/A")
-        table_rows.append([name_text, price_text, hl_text, roa_text, roe_text, str(r["pe"]), str(r["pbv"]), de_text, yld_text, str(r["score"])])
+        if name_text in fallback_marked_symbols:
+            name_text = f"⚠️{name_text}"
+        table_rows.append([name_text, price_text, roa_text, roe_text, str(r["pe"]), str(r["pbv"]), de_text, yld_text, str(r["score"])])
 
     widths = [len(h) for h in cols]
     for row in table_rows:
         for i, cell in enumerate(row):
             widths[i] = max(widths[i], len(cell))
 
-    def _fmt_row(cells: list[str]) -> str:
-        return " | ".join(cells[i].ljust(widths[i]) for i in range(len(cells)))
+    def _fmt_row(cells: list[str], is_header: bool = False) -> str:
+        formatted: list[str] = []
+        for i, cell in enumerate(cells):
+            if i == 0 or is_header:
+                formatted.append(cell.ljust(widths[i]))
+            else:
+                formatted.append(cell.rjust(widths[i]))
+        return " | ".join(formatted)
 
-    table_lines = [_fmt_row(cols), "-|-".join("-" * w for w in widths)]
+    table_lines = [_fmt_row(cols, is_header=True), "-|-".join("-" * w for w in widths)]
     table_lines.extend(_fmt_row(row) for row in table_rows)
 
     set_ok = sum(1 for r in results if r["from_set"])
@@ -2816,10 +3071,15 @@ async def _execute_stock_seeking_task(prompt: str) -> str:
     output_parts = [
         f"📊 **Stock Seeking — Deterministic** ({now_local.strftime('%Y-%m-%d %H:%M %Z')})",
         (
-            f"Siamchart pool: 600 → screened {len(pre_candidates)} → "
-            f"SET-verified {total_verified}/{total_attempted} fetched → "
-            f"showing {len(results)} (Score > {score_threshold})"
+            f"Siamchart pool ({pool_total}/{pool_total}) [fetched from web] → strict screened ({strict_screened_count}/{pool_total}) "
+            f"→ knowledge add ({knowledge_added_count}/{pool_total}) → screened total ({len(pre_candidates)}/{pool_total})"
         ),
+        (
+            f"SET-verified ({total_verified}/{TARGET} all screened) fetched → "
+            f"showing ({len(results)}/{len(pre_candidates)}) [high-score: {len(high_score)}, fallback: {len(fallback_marked_symbols)}]"
+        ),
+        f"Knowledge grounding: {knowledge_item_count}/{knowledge_total_available} auto-learn item(s) used.",
+        "Stability note: deterministic screening can repeat the same symbols between runs when market/fundamental inputs are similar.",
         "Price source: SET real-time (same as `!setfinancial`)",
         "N/A means that value was not available from grounded sources at run time.",
         "```",
@@ -2829,7 +3089,7 @@ async def _execute_stock_seeking_task(prompt: str) -> str:
     ]
     if reselection_note:
         output_parts.append(reselection_note)
-    return "\n".join(output_parts)[:3000]
+    return "\n".join(output_parts)
 
 
 async def _run_task_by_name(task_name: str) -> str:
@@ -3052,7 +3312,7 @@ async def _execute_complex_prompt(prompt: str, history: list) -> str:
         augmented = prompt
 
     memory = load_memory()
-    raw_answer = await ask_gemini(augmented, history, memory)
+    raw_answer = await ask_gemini(augmented, history, memory, knowledge_query=prompt)
     answer = enforce_grounded_reply(raw_answer, prompt)
     return _strip_bot_action_hallucinations(answer)
 
@@ -3163,6 +3423,10 @@ async def handle_natural_language_tools(message_text: str, history: list | None 
 
     if not text:
         return None
+
+    quick_toggle = _extract_auto_learning_quick_toggle_intent(text)
+    if quick_toggle:
+        return await asyncio.to_thread(_run_update_auto_learning_intent, quick_toggle)
 
     brief_chat_reply = _extract_brief_chat_reply(text)
     if brief_chat_reply is not None:
@@ -3553,9 +3817,10 @@ def build_system_instruction(memory: dict) -> str:
     )
 
 
-async def ask_gemini(user_message: str, history: list, memory: dict) -> str:
+async def ask_gemini(user_message: str, history: list, memory: dict, knowledge_query: str | None = None) -> str:
     system_prompt = build_system_instruction(memory)
-    knowledge_context = build_knowledge_research_context(user_message)
+    knowledge_source_text = (knowledge_query or user_message or "").strip()
+    knowledge_context = build_knowledge_research_context(knowledge_source_text)
 
     turns = []
     for turn in history[-20:]:
@@ -3563,9 +3828,17 @@ async def ask_gemini(user_message: str, history: list, memory: dict) -> str:
         turns.append(f"Assistant: {turn['assistant']}")
 
     history_block = "\n".join(turns) if turns else "(no previous conversation)"
+    brain_policy = (
+        "Brain-first policy:\n"
+        "1) Check the internal learned knowledge block first.\n"
+        "2) If relevant knowledge exists, use it as primary context before other reasoning.\n"
+        "3) If no relevant knowledge exists, say that clearly and continue with grounded data only.\n"
+    )
+
     prompt = (
         f"{system_prompt}\n\n"
-        f"{knowledge_context}\n\n" if knowledge_context else f"{system_prompt}\n\n"
+        f"{brain_policy}\n"
+        f"{knowledge_context}\n\n" if knowledge_context else f"{system_prompt}\n\n{brain_policy}\n"
     ) + (
         "Conversation history:\n"
         f"{history_block}\n\n"
@@ -3579,6 +3852,7 @@ async def ask_gemini(user_message: str, history: list, memory: dict) -> str:
         contents=prompt,
     )
     return response.text or "I don't have a response right now."
+
 
 
 @bot.event
@@ -3603,6 +3877,85 @@ async def on_ready():
         knowledge_learning_runner.start()
 
 
+
+def _split_discord_message_preserve_codeblocks(text: str, max_len: int = 1990) -> list[str]:
+    # Split long Discord messages without breaking table/code-block formatting.
+    if not text:
+        return [""]
+    if len(text) <= max_len:
+        return [text]
+
+    chunks: list[str] = []
+    current = ""
+
+    def _flush_current() -> None:
+        nonlocal current
+        if current:
+            chunks.append(current)
+            current = ""
+
+    parts = text.split("```")
+    for idx, part in enumerate(parts):
+        is_code_block = (idx % 2 == 1)
+
+        if not is_code_block:
+            lines = part.splitlines(keepends=True)
+            if not lines:
+                lines = [part]
+            for line in lines:
+                if len(line) > max_len:
+                    _flush_current()
+                    start = 0
+                    while start < len(line):
+                        chunks.append(line[start:start + max_len])
+                        start += max_len
+                    continue
+                if current and len(current) + len(line) > max_len:
+                    _flush_current()
+                current += line
+            continue
+
+        code_lines = part.splitlines()
+        if not code_lines and part:
+            code_lines = [part]
+        if not code_lines:
+            tiny = "``````"
+            if current and len(current) + len(tiny) > max_len:
+                _flush_current()
+            current += tiny
+            continue
+
+        code_buf = ""
+        for line in code_lines:
+            candidate = f"{code_buf}\n{line}" if code_buf else line
+            wrapped = f"```{candidate}```"
+            if len(wrapped) <= max_len:
+                code_buf = candidate
+                continue
+
+            if code_buf:
+                block = f"```{code_buf}```"
+                if current and len(current) + len(block) > max_len:
+                    _flush_current()
+                current += block
+                _flush_current()
+                code_buf = ""
+
+            hard_limit = max(1, max_len - 6)
+            start = 0
+            while start < len(line):
+                segment = line[start:start + hard_limit]
+                chunks.append(f"```{segment}```")
+                start += hard_limit
+
+        if code_buf:
+            block = f"```{code_buf}```"
+            if current and len(current) + len(block) > max_len:
+                _flush_current()
+            current += block
+
+    _flush_current()
+    return chunks
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.bot:
@@ -3670,7 +4023,7 @@ async def on_message(message: discord.Message):
     memory["total_messages"] = memory.get("total_messages", 0) + 1
     save_memory(memory)
 
-    for chunk in [reply[i:i + 1990] for i in range(0, len(reply), 1990)]:
+    for chunk in _split_discord_message_preserve_codeblocks(reply):
         await message.reply(chunk)
 
     await bot.process_commands(message)
@@ -3724,7 +4077,7 @@ async def task_runner():
                 f"Result:\n{result}\n"
                 f"Recorded last_run: {run_at}"
             )
-            for chunk in [message[i:i + 1990] for i in range(0, len(message), 1990)]:
+            for chunk in _split_discord_message_preserve_codeblocks(message):
                 await channel.send(chunk)
         except Exception as exc:
             await channel.send(f"⚠️ Task run failed: {task_name} | {exc}")
@@ -3740,33 +4093,59 @@ async def knowledge_learning_runner():
     for job in jobs:
         if not _is_auto_learning_job_due(job, now):
             continue
+        job_name = str(job.get("name") or "(unnamed)")
         try:
-            result = await _run_single_auto_learning_job(job)
+            print(f"[KhunDech] Auto-learning due: {job_name}")
+            result = await asyncio.wait_for(_run_single_auto_learning_job(job), timeout=180)
             await asyncio.to_thread(_record_auto_learning_last_run, str(job.get("name")), _now_utc_naive().isoformat())
+            print(f"[KhunDech] Auto-learning completed: {job_name}")
+        except asyncio.TimeoutError:
+            print(f"[KhunDech] Auto-learning timeout for {job_name} (180s)")
         except Exception as exc:
-            print(f"[KhunDech] Financial knowledge learning failed for {job.get('name')}: {exc}")
+            print(f"[KhunDech] Financial knowledge learning failed for {job_name}: {exc}")
+
+            backoff_seconds = _get_auto_learning_backoff_seconds(exc)
+            if backoff_seconds:
+                blocked_until = _now_utc_naive() + timedelta(seconds=backoff_seconds)
+                await asyncio.to_thread(
+                    _record_auto_learning_backoff,
+                    job_name,
+                    blocked_until.isoformat(),
+                    str(exc),
+                )
+                print(
+                    f"[KhunDech] Auto-learning backoff applied for {job_name} until "
+                    f"{blocked_until.isoformat()} ({backoff_seconds}s)"
+                )
+
             continue
 
-        memory = load_memory()
-        memory.setdefault("learned_facts", []).append(
-            f"[{datetime.now().strftime('%Y-%m-%d')}] Financial knowledge job {job.get('name')}: Q={result.get('question')}"
-        )
-        memory["learned_facts"] = memory["learned_facts"][-500:]
-        save_memory(memory)
+        try:
+            memory = load_memory()
+            memory.setdefault("learned_facts", []).append(
+                f"[{datetime.now().strftime('%Y-%m-%d')}] Financial knowledge job {job.get('name')}: Q={result.get('question')}"
+            )
+            memory["learned_facts"] = memory["learned_facts"][-500:]
+            save_memory(memory)
 
-        channel = bot.get_channel(LEARNING_CHANNEL_ID)
-        if not channel:
+            channel = bot.get_channel(LEARNING_CHANNEL_ID)
+            if not channel:
+                continue
+
+            entry_cap_display = result.get('entry_cap', 'N/A')
+            msg = (
+                "🧠 Financial knowledge learned\n"
+                f"- Job: {result.get('job_name')}\n"
+                f"- Question: {result.get('question')}\n"
+                f"- Next question: {result.get('next_question')}\n"
+                f"- Total knowledge learned: {result.get('total_entries')}\n"
+                f"- Stored entries: {result.get('stored_entries', result.get('total_entries'))}/{entry_cap_display}"
+            )
+            for chunk in [msg[i:i + 1990] for i in range(0, len(msg), 1990)]:
+                await channel.send(chunk)
+        except Exception as exc:
+            print(f"[KhunDech] Auto-learning post-processing failed for {job_name}: {exc}")
             continue
-
-        msg = (
-            "🧠 Financial knowledge learned\n"
-            f"- Job: {result.get('job_name')}\n"
-            f"- Question: {result.get('question')}\n"
-            f"- Next question: {result.get('next_question')}\n"
-            f"- Total knowledge entries: {result.get('total_entries')}"
-        )
-        for chunk in [msg[i:i + 1990] for i in range(0, len(msg), 1990)]:
-            await channel.send(chunk)
 
 
 @daily_report.before_loop
@@ -3853,7 +4232,8 @@ async def cmd_klearn(ctx: commands.Context, *, job_name: str = "set_financial"):
         f"- Job: {result.get('job_name')}\n"
         f"- Question: {result.get('question')}\n"
         f"- Next question: {result.get('next_question')}\n"
-        f"- Total knowledge entries: {result.get('total_entries')}"
+        f"- Total knowledge learned: {result.get('total_entries')}\n"
+        f"- Stored entries: {result.get('stored_entries', result.get('total_entries'))}/{result.get('entry_cap', 'N/A')}"
     )
 
 

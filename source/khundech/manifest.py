@@ -58,7 +58,12 @@ def load_skills_manifest() -> dict:
     # Load manifest from disk and auto-heal corrupt content.
     ensure_skills_manifest()
     try:
-        return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+        loaded = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise ValueError("Manifest root must be an object")
+        if not isinstance(loaded.get("skills"), list) or not isinstance(loaded.get("files"), list):
+            raise ValueError("Manifest must include list fields: skills, files")
+        return loaded
     except Exception:
         MANIFEST_PATH.write_text(
             json.dumps(DEFAULT_SKILLS_MANIFEST, indent=2, ensure_ascii=False),
@@ -73,8 +78,18 @@ def build_skills_context(manifest: dict) -> str:
     files = manifest.get("files", [])
     lines = ["Skills:"]
     for skill in skills:
-        lines.append(f"- {skill['name']}: {skill['description']}")
+        if isinstance(skill, dict):
+            name = str(skill.get("name") or "unknown_skill")
+            description = str(skill.get("description") or "")
+            lines.append(f"- {name}: {description}")
+        else:
+            lines.append(f"- {str(skill)}")
     lines.append("Files:")
     for file_info in files:
-        lines.append(f"- {file_info['path']}: {file_info['role']}")
+        if isinstance(file_info, dict):
+            path = str(file_info.get("path") or "unknown_path")
+            role = str(file_info.get("role") or "")
+            lines.append(f"- {path}: {role}")
+        else:
+            lines.append(f"- {str(file_info)}")
     return "\n".join(lines)
